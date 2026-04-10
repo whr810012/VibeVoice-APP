@@ -162,6 +162,14 @@ tags
 # .lock
 *.lock
 
+# Electron / Node / Vue (vibevoice-app)
+vibevoice-app/node_modules/
+vibevoice-app/dist/
+vibevoice-app/dist_electron/
+vibevoice-app/.env*
+vibevoice-app/backend/tmp/
+vibevoice-app/backend/__pycache__/
+
 # DS_Store (MacOS)
 .DS_Store
 
