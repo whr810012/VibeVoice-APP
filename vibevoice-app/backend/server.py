@@ -26,7 +26,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from vibevoice.modular.modeling_vibevoice_asr import VibeVoiceASRForConditionalGeneration
 from vibevoice.processor.vibevoice_asr_processor import VibeVoiceASRProcessor
-from demo.web.app import StreamingTTSService
+from vibevoice.service import StreamingTTSService
 from vibevoice.modular.streamer import AudioStreamer
 
 # Global model instances
@@ -295,9 +295,8 @@ async def generate_speech(request: TTSRequest):
 
 @app.get("/voices")
 async def get_voices():
-    # Directly list the directory to avoid dependency on model loading
-    root_dir = Path(__file__).parent.parent.parent
-    voices_dir = root_dir / "demo" / "voices" / "streaming_model"
+    # Scanning from the new resources directory
+    voices_dir = Path(__file__).parent / "resources" / "voices" / "streaming_model"
     
     if not voices_dir.exists():
         print(f"Warning: Voices directory not found at {voices_dir}")

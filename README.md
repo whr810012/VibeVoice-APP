@@ -11,7 +11,25 @@
 - **主进程 (Main Process)**: Electron 核心。负责后端 FastAPI 进程的生命周期监控、文件系统操作及嵌入式运行时管理。
 - **后端 (Python Backend)**: 基于 FastAPI 封装的 VibeVoice 核心模型服务。
 
-## 3. 本地运行指南
+## 3. 目录结构
+```text
+VibeVoice/
+├── vibevoice/              # 核心引擎 (Python 逻辑)
+│   ├── modular/            # 模型定义与推理模块
+│   ├── processor/          # 音频与文本处理器
+│   ├── schedule/           # 扩散模型调度器
+│   └── service.py          # 封装的 TTS 服务类
+├── vibevoice-app/          # 桌面端应用 (Electron + Vue)
+│   ├── electron/           # Electron 主进程代码
+│   ├── src/                # Vue 前端渲染进程代码
+│   └── backend/            # 应用后端
+│       ├── server.py       # FastAPI 服务入口
+│       └── resources/      # 静态资源 (音色模型等)
+├── pyproject.toml          # Python 项目配置
+└── README.md               # 项目说明
+```
+
+## 4. 本地运行指南
 
 ### 前置要求
 - **Node.js**: v16+
@@ -39,7 +57,7 @@ npm run dev
 ```
 此命令将同时启动前端开发服务器和后端的 FastAPI 服务。
 
-## 4. 目前开发进度
+## 5. 目前开发进度
 
 ### 已完成功能 (Phase 1-4)
 - [x] **后端封装**: 基于 FastAPI 实现 ASR 和 TTS 的接口封装。
@@ -54,13 +72,13 @@ npm run dev
 - [ ] **打包测试**: Windows 平台下的 `electron-builder` 环境适配与随包集成测试。
 - [ ] **UI 润色**: 进一步优化界面动画与交互细节。
 
-## 5. 后续开发计划
+## 6. 后续开发计划
 - [ ] **多语言支持**: 引入 i18n，支持中英文界面切换。
 - [ ] **模型热更新**: 支持在 UI 上直接下载/更新模型权重文件。
 - [ ] **实时监听**: 实现类似语音助手的实时语音唤醒与识别模式。
 - [ ] **多端适配**: 完成 macOS 与 Linux 平台的打包适配。
 
-## 6. 核心优势（对比原始 VibeVoice）
+## 7. 核心优势（对比原始 VibeVoice）
 
 ### 🚀 一键部署，零环境依赖
 - **现状**: 原始版本需要用户手动安装 Python、Git，配置虚拟环境，并处理复杂的 pip 依赖冲突。
