@@ -165,7 +165,11 @@ tags
 # Electron / Node / Vue (vibevoice-app)
 vibevoice-app/node_modules/
 vibevoice-app/dist/
+vibevoice-app/dist-electron/
 vibevoice-app/dist_electron/
+vibevoice-app/release/
+vibevoice-app/*.exe
+vibevoice-app/*.blockmap
 vibevoice-app/.env*
 vibevoice-app/backend/tmp/
 vibevoice-app/backend/__pycache__/

@@ -30,9 +30,10 @@ function startBackend(port?: number, device?: 'cpu' | 'cuda') {
   // In production, assist embedded Python by setting PYTHONHOME/PYTHONPATH
   if (!isDev) {
     const pyHome = path.join(process.resourcesPath, 'python-win')
+    const vibevoiceLib = path.join(process.resourcesPath, 'vibevoice')
     env.PYTHONHOME = pyHome
-    env.PYTHONPATH = path.join(pyHome, 'Lib')
-    env.PATH = `${pyHome};${env.PATH || ''}`
+    env.PYTHONPATH = [path.join(pyHome, 'Lib'), path.join(pyHome, 'Lib', 'site-packages'), vibevoiceLib, process.resourcesPath].join(path.delimiter)
+    env.PATH = `${pyHome};${path.join(pyHome, 'Scripts')};${env.PATH || ''}`
   }
 
   pyProc = spawn(pyPath, args, {

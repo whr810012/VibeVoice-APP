@@ -59,7 +59,7 @@ npm run dev
 
 ## 5. 目前开发进度
 
-### 已完成功能 (Phase 1-4)
+### 已完成功能 (Phase 1-5)
 - [x] **后端封装**: 基于 FastAPI 实现 ASR 和 TTS 的接口封装。
 - [x] **进程管理**: Electron 自动启动/关闭/重启 Python 后端。
 - [x] **ASR 增强**: 实现异步 Job 队列，支持长音频转写进度显示及取消。
@@ -67,10 +67,17 @@ npm run dev
 - [x] **历史记录**: 实现 ASR/TTS 结果的本地持久化存储。
 - [x] **设置中心**: 支持动态切换运行设备 (CPU/GPU) 及端口配置。
 - [x] **导出系统**: 支持自定义导出路径及批量导出。
+- [x] **Windows 嵌入式运行时集成**: Electron 主进程在生产模式下改为加载 `python-win/python.exe`，并补齐 `PYTHONHOME/PYTHONPATH` 及 `electron-builder` 资源打包配置，实现“随包可运行”的基础能力。
 
 ### 进行中功能
-- [ ] **打包测试**: Windows 平台下的 `electron-builder` 环境适配与随包集成测试。
+- [ ] **打包回归测试**: Windows 安装包全链路验证（安装/启动/ASR/TTS/导出/重启后端）与异常场景修复。
 - [ ] **UI 润色**: 进一步优化界面动画与交互细节。
+
+### 最新打包产物（Windows）
+- [x] **首次打包验证通过**: 已成功生成 NSIS 安装包（x64）。
+- 安装包文件（本地）：`vibevoice-app/release/VibeVoice Desktop Setup 0.1.0.exe`
+- 解包目录：`vibevoice-app/release/win-unpacked`
+- 备注：当前使用默认 Electron 图标（尚未配置 `build/icon.ico`）。
 
 ## 6. 后续开发计划
 - [ ] **多语言支持**: 引入 i18n，支持中英文界面切换。
