@@ -85,8 +85,8 @@ npm run dev
 - [x] **0.1.1 打包完成**: 已成功生成 NSIS 安装包（x64）。
 - 本地安装包路径：`vibevoice-app/release-0.1.1/VibeVoice Desktop Setup 0.1.1.exe`
 - 解包目录：`vibevoice-app/release-0.1.1/win-unpacked`
-- GitHub Release（当前线上版本）：[VibeVoice Desktop Setup 0.1.0.exe](https://github.com/whr810012/VibeVoice-APP/releases/download/v0.1.0/VibeVoice.Desktop.Setup.0.1.0.exe)
-- 备注：当前使用默认 Electron 图标（尚未配置 `build/icon.ico`）；发布 `0.1.1` 时请同步更新 Release 标签与资产名称。
+- GitHub Release（当前线上版本）：[VibeVoice Desktop Setup 0.1.1.exe](https://github.com/whr810012/VibeVoice-APP/releases/download/v0.1.1/VibeVoice.Desktop.Setup.0.1.1.exe)
+- 备注：当前使用默认 Electron 图标（尚未配置 `build/icon.ico`）；后续版本发布时请同步更新 Release 标签与资产名称。
 
 ## 6. 后续开发计划
 - [ ] **多语言支持（i18n）**: 引入中英文文案资源与设置页语言切换。
