@@ -8,6 +8,10 @@ import fsp from 'fs/promises'
 let mainWindow: BrowserWindow | null = null
 let pyProc: ChildProcess | null = null
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function startBackend(port?: number, device?: 'cpu' | 'cuda') {
   const isDev = !app.isPackaged
   let pyPath = 'python'
@@ -51,7 +55,7 @@ function startBackend(port?: number, device?: 'cpu' | 'cuda') {
   })
 }
 
-function createWindow() {
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -62,16 +66,63 @@ function createWindow() {
     title: "VibeVoice Desktop"
   })
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('Renderer loaded successfully')
+  })
+
+  mainWindow.webContents.on('did-fail-load', (_event, code, desc, url) => {
+    console.error(`Renderer load failed: [${code}] ${desc} (${url})`)
+  })
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`Renderer process gone: ${details.reason}`)
+  })
+
   if (app.isPackaged) {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
-  } else {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL as string)
+    await mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+    return
+  }
+
+  const devServerUrl = process.env.VITE_DEV_SERVER_URL
+  if (!devServerUrl) {
+    console.error('VITE_DEV_SERVER_URL is empty, cannot load renderer.')
+    return
+  }
+
+  let targetDevUrl = devServerUrl
+  try {
+    const parsed = new URL(devServerUrl)
+    if (!parsed.pathname || parsed.pathname === '/') {
+      parsed.pathname = '/index.html'
+    }
+    targetDevUrl = parsed.toString()
+  } catch {
+    if (devServerUrl.endsWith('/')) {
+      targetDevUrl = `${devServerUrl}index.html`
+    }
+  }
+
+  // In dev mode, Vite can be ready slightly earlier than the first page route.
+  // Retry a few times to reduce intermittent white-screen issues on startup.
+  const maxRetries = 8
+  for (let i = 1; i <= maxRetries; i++) {
+    try {
+      await mainWindow.loadURL(targetDevUrl)
+      return
+    } catch (error: any) {
+      console.error(`loadURL attempt ${i}/${maxRetries} failed: ${error?.message || error}`)
+      if (i < maxRetries) {
+        await sleep(500)
+      }
+    }
   }
 }
 
 app.whenReady().then(() => {
   startBackend()
-  createWindow()
+  createWindow().catch((error) => {
+    console.error(`Failed to create window: ${error}`)
+  })
 })
 
 ipcMain.handle('vv:restart-backend', async (_e, payload: { port?: number, device?: 'cpu'|'cuda' }) => {

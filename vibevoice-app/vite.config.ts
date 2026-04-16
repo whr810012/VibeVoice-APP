@@ -14,6 +14,14 @@ export default defineConfig({
     ]),
     renderer(),
   ],
+  optimizeDeps: {
+    entries: ['index.html'],
+  },
+  server: {
+    watch: {
+      ignored: ['**/release/**', '**/python-win/**'],
+    },
+  },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

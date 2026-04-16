@@ -1,10 +1,10 @@
 {
   "name": "vibevoice-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && electron-builder",
+    "build": "vite build --emptyOutDir false && electron-builder",
     "dist": "npm run build",
     "preview": "vite preview"
   },
@@ -47,7 +47,8 @@
       }
     ],
     "directories": {
-      "buildResources": "build"
+      "buildResources": "build",
+      "output": "release"
     },
     "win": {
       "target": [

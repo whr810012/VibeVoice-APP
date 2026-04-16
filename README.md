@@ -32,7 +32,7 @@ VibeVoice/
 ## 4. 本地运行指南
 
 ### 前置要求
-- **Node.js**: v16+
+- **Node.js**: v18+（推荐 **v20 LTS**，避免新版本兼容问题）
 - **Python**: v3.10+ (推荐使用虚拟环境)
 - **CUDA**: 如需使用 GPU 加速，需安装相应的 NVIDIA 驱动和工具包。
 
@@ -69,21 +69,31 @@ npm run dev
 - [x] **导出系统**: 支持自定义导出路径及批量导出。
 - [x] **Windows 嵌入式运行时集成**: Electron 主进程在生产模式下改为加载 `python-win/python.exe`，并补齐 `PYTHONHOME/PYTHONPATH` 及 `electron-builder` 资源打包配置，实现“随包可运行”的基础能力。
 
+### 已完成迭代（UI 与开发稳定性）
+- [x] **UI 风格系统升级（v2）**: 建立统一设计变量（颜色/间距/圆角/阴影）、卡片化层级、状态条与一致化交互反馈。
+- [x] **主题系统闭环**: 支持浅色/深色/跟随系统三种主题，主题可即时切换并持久化保存。
+- [x] **可访问性增强**: 增加 `focus-visible` 焦点样式，补充高对比模式与强制颜色模式适配。
+- [x] **历史页体验优化**: 空状态引导、语义化按钮图标、表格可读性与移动端布局优化。
+- [x] **开发环境白屏修复**: Electron 开发模式增加 `loadURL` 重试与加载诊断日志，并固定加载 `index.html` 以规避首页 404 白屏。
+- [x] **Vite 稳定性优化**: 限制依赖扫描入口并忽略 `release/python-win` 目录，避免误扫外部资源导致构建异常。
+
 ### 进行中功能
 - [ ] **打包回归测试**: Windows 安装包全链路验证（安装/启动/ASR/TTS/导出/重启后端）与异常场景修复。
-- [ ] **UI 润色**: 进一步优化界面动画与交互细节。
+- [ ] **版本收口**: 图标资源、安装包视觉统一与发版说明完善。
 
 ### 最新打包产物（Windows）
-- [x] **首次打包验证通过**: 已成功生成 NSIS 安装包（x64）。
-- 安装包下载（GitHub Release）：[VibeVoice Desktop Setup 0.1.0.exe](https://github.com/whr810012/VibeVoice-APP/releases/download/v0.1.0/VibeVoice.Desktop.Setup.0.1.0.exe)
-- 解包目录：`vibevoice-app/release/win-unpacked`
-- 备注：当前使用默认 Electron 图标（尚未配置 `build/icon.ico`）；若版本号变化，请同步更新 Release 链接中的 `v0.1.0` 与文件名。
+- [x] **0.1.1 打包完成**: 已成功生成 NSIS 安装包（x64）。
+- 本地安装包路径：`vibevoice-app/release-0.1.1/VibeVoice Desktop Setup 0.1.1.exe`
+- 解包目录：`vibevoice-app/release-0.1.1/win-unpacked`
+- GitHub Release（当前线上版本）：[VibeVoice Desktop Setup 0.1.0.exe](https://github.com/whr810012/VibeVoice-APP/releases/download/v0.1.0/VibeVoice.Desktop.Setup.0.1.0.exe)
+- 备注：当前使用默认 Electron 图标（尚未配置 `build/icon.ico`）；发布 `0.1.1` 时请同步更新 Release 标签与资产名称。
 
 ## 6. 后续开发计划
-- [ ] **多语言支持**: 引入 i18n，支持中英文界面切换。
+- [ ] **多语言支持（i18n）**: 引入中英文文案资源与设置页语言切换。
 - [ ] **模型热更新**: 支持在 UI 上直接下载/更新模型权重文件。
 - [ ] **实时监听**: 实现类似语音助手的实时语音唤醒与识别模式。
 - [ ] **多端适配**: 完成 macOS 与 Linux 平台的打包适配。
+- [ ] **UI 最终验收**: 主题与高对比模式在 Windows 安装包环境下的可用性回归。
 
 ## 7. 核心优势（对比原始 VibeVoice）
 

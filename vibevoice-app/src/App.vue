@@ -13,7 +13,7 @@
         @select="handleSelect"
       >
         <el-menu-item index="asr">
-          <el-icon><Document /></el-icon>
+          <el-icon><Microphone /></el-icon>
           <span>语音转写 (ASR)</span>
         </el-menu-item>
         <el-menu-item index="tts">
@@ -22,7 +22,7 @@
         </el-menu-item>
         <el-divider />
         <el-menu-item index="history">
-          <el-icon><Document /></el-icon>
+          <el-icon><Files /></el-icon>
           <span>历史记录</span>
         </el-menu-item>
         <el-divider />
@@ -55,15 +55,39 @@
 
     <!-- Main Content -->
     <el-main class="main-content">
+      <div class="workspace-status polished-card">
+        <div class="workspace-left">
+          <el-tag size="small" :type="backendOnline ? 'success' : 'danger'" effect="dark">
+            {{ backendOnline ? '后端在线' : '后端离线' }}
+          </el-tag>
+          <span class="workspace-meta">当前模块：{{ activeTabLabel }}</span>
+        </div>
+        <div class="workspace-right">
+          <span class="workspace-meta">端口 {{ settings.port }}</span>
+          <span class="workspace-divider">|</span>
+          <span class="workspace-meta">设备 {{ status.device.toUpperCase() }}</span>
+          <span class="workspace-divider">|</span>
+          <span class="workspace-meta">主题 {{ themeLabel }}</span>
+          <span class="workspace-divider">|</span>
+          <span class="workspace-meta">更新时间 {{ lastStatusAt || '--:--:--' }}</span>
+        </div>
+      </div>
+
       <!-- ASR Page -->
       <transition name="fade" mode="out-in">
         <div v-if="activeTab === 'asr'" class="page-container" key="asr">
           <div class="page-header">
             <h2>智能语音转写</h2>
-            <p>支持单次最长 60 分钟音频，自动识别说话人与时间戳</p>
+            <p>面向长音频场景，自动识别说话人与时间戳，提供稳定可追踪的转写流程。</p>
+            <div class="header-meta">
+              <el-tag size="small" effect="plain" type="info">稳定模式</el-tag>
+              <el-tag size="small" effect="plain" :type="status.device === 'cuda' ? 'success' : 'warning'">
+                {{ status.device === 'cuda' ? 'GPU 加速' : 'CPU 兼容' }}
+              </el-tag>
+            </div>
           </div>
 
-          <el-card class="upload-card" shadow="never">
+          <el-card class="upload-card polished-card" shadow="never">
             <el-upload
               class="asr-uploader"
               drag
@@ -83,14 +107,16 @@
               <div class="file-meta">
                 <el-icon><Headset /></el-icon>
                 <span>{{ audioFile.name }}</span>
-                <el-button link type="danger" @click="clearAudio">移除</el-button>
+                <el-button link type="danger" icon="Delete" @click="clearAudio">移除</el-button>
               </div>
               <div id="waveform" class="waveform-container"></div>
               <div class="actions">
                 <el-button 
+                  class="primary-action"
                   type="primary" 
                   size="large" 
                   :loading="processing" 
+                  :disabled="!canStartAsr"
                   @click="startTranscription"
                   icon="VideoPlay"
                 >
@@ -101,7 +127,6 @@
                   type="danger" 
                   size="large" 
                   plain 
-                  style="margin-left: 12px"
                   @click="cancelTranscription"
                 >
                   取消任务
@@ -113,13 +138,14 @@
             </div>
           </el-card>
 
-          <el-card v-if="transcription || processing" class="result-card" shadow="hover">
+          <el-card v-if="transcription || processing" class="result-card polished-card" shadow="hover">
             <template #header>
               <div class="card-header">
                 <span class="title">转写结果</span>
                 <div class="tools">
-                  <el-button link icon="CopyDocument" @click="copyTranscription">复制</el-button>
-                  <el-button link icon="Download" @click="downloadTranscription">导出</el-button>
+                  <el-tag size="small" effect="plain" type="info">字数 {{ transcription.length }}</el-tag>
+                  <el-button link icon="CopyDocument" :disabled="!hasTranscription" @click="copyTranscription">复制</el-button>
+                  <el-button link icon="Download" :disabled="!hasTranscription" @click="downloadTranscription">导出</el-button>
                 </div>
               </div>
             </template>
@@ -137,12 +163,16 @@
         <div v-else-if="activeTab === 'tts'" class="page-container" key="tts">
           <div class="page-header">
             <h2>长文本语音合成</h2>
-            <p>基于 Diffusion 架构，支持多人对话与长达 90 分钟的语音生成</p>
+            <p>基于 Diffusion 架构，支持长文本语音生成与音色配置。</p>
+            <div class="header-meta">
+              <el-tag size="small" effect="plain" type="info">高质量模式</el-tag>
+              <el-tag size="small" effect="plain">步数 {{ ttsInferenceSteps }}</el-tag>
+            </div>
           </div>
 
           <el-row :gutter="20">
             <el-col :span="16">
-              <el-card class="editor-card" shadow="never">
+              <el-card class="editor-card polished-card" shadow="never">
                 <el-input
                   v-model="ttsText"
                   type="textarea"
@@ -153,10 +183,11 @@
                 <div class="text-stats">
                   字数统计: {{ ttsText.length }} 字
                 </div>
+                <div class="text-hint">建议单次控制在 1200 字以内以获得更稳定的生成速度。</div>
               </el-card>
             </el-col>
             <el-col :span="8">
-              <el-card class="config-card" shadow="never">
+              <el-card class="config-card polished-card" shadow="never">
                 <template #header>合成配置</template>
                 <el-form label-position="top">
                   <el-form-item label="角色音色">
@@ -171,19 +202,21 @@
                   </el-form-item>
                   <el-form-item label="推理步数 (Diffusion Steps)">
                     <el-slider v-model="ttsInferenceSteps" :min="1" :max="50" />
+                    <div class="form-tip">当前步数：{{ ttsInferenceSteps }}（更高质量但更慢）</div>
                   </el-form-item>
                   <div class="tts-actions">
                     <el-button 
+                      class="primary-action"
                       type="primary" 
-                      style="width: 100%" 
                       size="large"
                       @click="generateTTS" 
                       :loading="ttsLoading"
+                      :disabled="!canGenerateTts"
                       icon="Microphone"
                     >
                       生成语音
                     </el-button>
-                  <div v-if="ttsAudioUrl" style="margin-top:12px">
+                  <div v-if="ttsAudioUrl" class="audio-preview">
                     <audio :src="ttsAudioUrl" controls style="width:100%"></audio>
                   </div>
                   </div>
@@ -197,38 +230,52 @@
         <div v-else-if="activeTab === 'history'" class="page-container" key="history">
           <div class="page-header">
             <h2>历史记录</h2>
-            <p>查看最近的转写与合成任务</p>
+            <p>统一管理转写与合成任务，支持播放、导出与删除。</p>
+            <div class="header-meta">
+              <el-tag size="small" effect="plain">ASR {{ asrHistory.length }} 条</el-tag>
+              <el-tag size="small" effect="plain">TTS {{ ttsHistory.length }} 条</el-tag>
+            </div>
           </div>
 
           <el-row :gutter="20">
             <el-col :span="12">
-              <el-card shadow="never" class="history-card">
+              <el-card shadow="never" class="history-card polished-card">
                 <template #header>ASR 历史</template>
-                <el-table :data="asrHistory" size="small" style="width:100%">
+                <el-table :data="asrHistory" stripe size="small" style="width:100%" empty-text="暂无 ASR 记录">
+                  <template #empty>
+                    <el-empty description="暂无 ASR 记录" :image-size="84">
+                      <el-button text type="primary" @click="goTab('asr')">去创建转写任务</el-button>
+                    </el-empty>
+                  </template>
                   <el-table-column prop="id" label="任务ID" width="220" />
                   <el-table-column label="时长" width="100">
                     <template #default="scope">{{ formatDuration(scope.row.total_seconds) }}</template>
                   </el-table-column>
                   <el-table-column label="操作" width="240">
                     <template #default="scope">
-                      <el-button size="small" @click="downloadAsr(scope.row)">下载文本</el-button>
-                      <el-button size="small" type="danger" @click="deleteAsr(scope.row)">删除</el-button>
+                      <el-button size="small" icon="Download" @click="downloadAsr(scope.row)">导出文本</el-button>
+                      <el-button size="small" icon="Delete" type="danger" @click="deleteAsr(scope.row)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
               </el-card>
             </el-col>
             <el-col :span="12">
-              <el-card shadow="never" class="history-card">
+              <el-card shadow="never" class="history-card polished-card">
                 <template #header>TTS 历史</template>
-                <el-table :data="ttsHistory" size="small" style="width:100%">
+                <el-table :data="ttsHistory" stripe size="small" style="width:100%" empty-text="暂无 TTS 记录">
+                  <template #empty>
+                    <el-empty description="暂无 TTS 记录" :image-size="84">
+                      <el-button text type="primary" @click="goTab('tts')">去创建合成任务</el-button>
+                    </el-empty>
+                  </template>
                   <el-table-column prop="id" label="文件名" width="240" />
                   <el-table-column prop="voice" label="音色" width="140" />
                   <el-table-column label="操作" width="220">
                     <template #default="scope">
-                      <el-button size="small" @click="playTts(scope.row)">播放</el-button>
-                      <el-button size="small" @click="downloadTts(scope.row)">下载</el-button>
-                      <el-button size="small" type="danger" @click="deleteTts(scope.row)">删除</el-button>
+                      <el-button size="small" icon="VideoPlay" @click="playTts(scope.row)">播放</el-button>
+                      <el-button size="small" icon="Download" @click="downloadTts(scope.row)">导出音频</el-button>
+                      <el-button size="small" icon="Delete" type="danger" @click="deleteTts(scope.row)">删除</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -241,11 +288,28 @@
         <div v-else-if="activeTab === 'settings'" class="page-container" key="settings">
           <div class="page-header">
             <h2>系统设置</h2>
-            <p>配置模型运行环境与服务端口</p>
+            <p>配置运行设备、导出目录与服务端口，确保系统稳定运行。</p>
+            <div class="header-meta">
+              <el-tag size="small" effect="plain" type="warning">高影响操作</el-tag>
+              <el-tag size="small" effect="plain">端口 {{ settings.port }}</el-tag>
+            </div>
           </div>
 
-          <el-card class="settings-card" shadow="never">
+          <el-card class="settings-card polished-card" shadow="never">
             <el-form :model="settings" label-width="140px">
+              <el-form-item label="界面主题">
+                <el-radio-group v-model="settings.theme">
+                  <el-radio-button label="system">跟随系统</el-radio-button>
+                  <el-radio-button label="light">浅色</el-radio-button>
+                  <el-radio-button label="dark">深色</el-radio-button>
+                </el-radio-group>
+                <div class="form-tip">主题切换即时生效，无需重启服务。</div>
+                <div class="theme-actions">
+                  <el-button text icon="RefreshLeft" @click="resetAppearance">
+                    恢复默认外观（跟随系统）
+                  </el-button>
+                </div>
+              </el-form-item>
               <el-form-item label="首选推理设备">
                 <el-radio-group v-model="settings.device">
                   <el-radio-button label="cuda">GPU (NVIDIA)</el-radio-button>
@@ -267,10 +331,10 @@
                 </div>
               </el-form-item>
               <el-form-item label="导出目录">
-                <div style="display:flex;gap:8px;align-items:center;width:100%">
+                <div class="export-row">
                   <el-input v-model="settings.exportDir" placeholder="未选择" readonly />
                   <el-button @click="selectExportDir">选择目录</el-button>
-                  <el-button type="primary" @click="exportHistory" :disabled="!settings.exportDir">一键导出历史</el-button>
+                  <el-button type="primary" :loading="exportingHistory" @click="exportHistory" :disabled="!settings.exportDir">一键导出历史</el-button>
                   <el-button @click="openExportDir" :disabled="!settings.exportDir">打开目录</el-button>
                 </div>
                 <div class="form-tip">导出 ASR 文本与 TTS 音频到所选目录（自动创建 ASR/TTS 子文件夹）</div>
@@ -279,9 +343,9 @@
                 <el-input-number v-model="settings.port" :min="1024" :max="65535" />
               </el-form-item>
               <el-divider />
-              <el-form-item>
-                <el-button type="primary" @click="saveSettings">保存并重启服务</el-button>
-                <el-button @click="resetSettings">恢复默认</el-button>
+              <el-form-item class="settings-actions">
+                <el-button type="primary" icon="RefreshRight" :loading="restartingBackend" @click="saveSettings">保存并重启服务</el-button>
+                <el-button icon="Refresh" :disabled="restartingBackend" @click="resetSettings">恢复默认</el-button>
               </el-form-item>
             </el-form>
           </el-card>
@@ -294,40 +358,55 @@
             <p>系统信息与开发者指南</p>
           </div>
 
-          <el-card shadow="never" class="about-card">
+          <el-card shadow="never" class="about-card polished-card">
             <div class="about-content">
-              <h3>VibeVoice Desktop v1.0.0</h3>
-              <p>本项目是 VibeVoice 语音系统的官方桌面化封装版本。</p>
-              
-              <el-divider />
-              
-              <h4>系统特性</h4>
-              <ul>
-                <li>基于 Electron + Vue 3 构建的跨平台桌面应用</li>
-                <li>集成嵌入式 Python 运行时，无需安装 Python 环境</li>
-                <li>支持 GPU (CUDA) 与 CPU 模式一键切换</li>
-                <li>全流程 ASR 转写进度监控与任务取消</li>
-                <li>历史记录持久化管理与一键批量导出</li>
-              </ul>
+              <div class="about-hero">
+                <h3>VibeVoice Desktop v1.0.0</h3>
+                <p>为长音频处理设计的桌面工作台，聚焦“稳定、清晰、可控”的语音生产体验。</p>
+                <div class="about-tags">
+                  <el-tag effect="plain" size="small">Electron + Vue 3</el-tag>
+                  <el-tag effect="plain" size="small">Embedded Python</el-tag>
+                  <el-tag effect="plain" size="small">ASR / TTS Workflow</el-tag>
+                </div>
+              </div>
+
+              <div class="about-grid">
+                <div class="about-block">
+                  <h4>系统特性</h4>
+                  <ul>
+                    <li>跨平台桌面应用，界面与任务流程一致</li>
+                    <li>集成嵌入式 Python 运行时，降低部署门槛</li>
+                    <li>支持 GPU (CUDA) 与 CPU 模式快速切换</li>
+                    <li>ASR 转写进度可视化，支持任务取消</li>
+                    <li>历史记录可持久化，支持批量导出</li>
+                  </ul>
+                </div>
+                <div class="about-block">
+                  <h4>运行状态</h4>
+                  <el-descriptions :column="1" border>
+                    <el-descriptions-item label="计算设备">
+                      <el-tag :type="status.cuda_available ? 'success' : 'info'">
+                        {{ status.cuda_available ? 'CUDA 加速已开启' : 'CPU 兼容模式' }}
+                      </el-tag>
+                    </el-descriptions-item>
+                    <el-descriptions-item label="后端 API 地址">
+                      <code>http://127.0.0.1:{{ settings.port }}</code>
+                    </el-descriptions-item>
+                    <el-descriptions-item label="ASR 模型状态">
+                      {{ status.asr_loaded ? '✅ 已加载' : '⏳ 待加载' }}
+                    </el-descriptions-item>
+                    <el-descriptions-item label="TTS 模型状态">
+                      {{ status.tts_loaded ? '✅ 已加载' : '⏳ 待加载' }}
+                    </el-descriptions-item>
+                  </el-descriptions>
+                </div>
+              </div>
 
               <el-divider />
 
-              <h4>运行状态</h4>
               <el-descriptions :column="1" border>
-                <el-descriptions-item label="计算设备">
-                  <el-tag :type="status.cuda_available ? 'success' : 'info'">
-                    {{ status.cuda_available ? 'CUDA 加速已开启' : 'CPU 兼容模式' }}
-                  </el-tag>
-                </el-descriptions-item>
-                <el-descriptions-item label="后端 API 地址">
-                  <code>http://127.0.0.1:{{ settings.port }}</code>
-                </el-descriptions-item>
-                <el-descriptions-item label="ASR 模型状态">
-                  {{ status.asr_loaded ? '✅ 已加载' : '⏳ 待加载' }}
-                </el-descriptions-item>
-                <el-descriptions-item label="TTS 模型状态">
-                  {{ status.tts_loaded ? '✅ 已加载' : '⏳ 待加载' }}
-                </el-descriptions-item>
+                <el-descriptions-item label="产品定位">桌面端 AI 语音生产力工具</el-descriptions-item>
+                <el-descriptions-item label="核心能力">语音转写 / 语音合成 / 历史管理 / 批量导出</el-descriptions-item>
               </el-descriptions>
               
               <div style="margin-top: 32px; text-align: center; color: #94a3b8; font-size: 13px;">
@@ -362,8 +441,16 @@ const selectedVoice = ref('')
 const ttsInferenceSteps = ref(5)
 const ttsLoading = ref(false)
 const ttsAudioUrl = ref('')
-const status = reactive({ asr_loaded: false, tts_loaded: false, device: 'cpu' })
+const status = reactive({
+  asr_loaded: false,
+  tts_loaded: false,
+  device: 'cpu',
+  cuda_available: false,
+  cuda_device_name: '',
+  cuda_total_mem_bytes: 0
+})
 const settings = reactive({ 
+  theme: 'system',
   device: 'cuda', 
   port: 8000,
   exportDir: ''
@@ -372,12 +459,59 @@ const asrHistory = ref([])
 const ttsHistory = ref([])
 const SETTINGS_KEY = 'vv-settings'
 const gpuMismatch = computed(() => settings.device === 'cuda' && !status.cuda_available)
+const hasTranscription = computed(() => !!transcription.value.trim())
+const canStartAsr = computed(() => !!audioFile.value && !processing.value)
+const canGenerateTts = computed(() => !!ttsText.value.trim() && !!selectedVoice.value && !ttsLoading.value)
+const exportingHistory = ref(false)
+const restartingBackend = ref(false)
+const backendOnline = ref(false)
+const lastStatusAt = ref('')
+const themeLabel = computed(() => {
+  const map = {
+    system: '跟随系统',
+    light: '浅色',
+    dark: '深色'
+  }
+  return map[settings.theme] || '跟随系统'
+})
+const activeTabLabel = computed(() => {
+  const map = {
+    asr: '语音转写',
+    tts: '语音合成',
+    history: '历史记录',
+    settings: '系统设置',
+    about: '关于系统'
+  }
+  return map[activeTab.value] || '系统'
+})
 
 let wavesurfer = null
+const notify = (type: 'success' | 'error' | 'warning', message: string) => {
+  ElMessage({ type, message, showClose: true, duration: 2200 })
+}
+const applyTheme = (mode: string) => {
+  const root = document.documentElement
+  if (mode === 'dark' || mode === 'light') {
+    root.setAttribute('data-theme', mode)
+    return
+  }
+  root.removeAttribute('data-theme')
+}
+const resetAppearance = () => {
+  settings.theme = 'system'
+  notify('success', '已恢复默认外观')
+}
+const nowTimeText = () => {
+  const d = new Date()
+  return d.toTimeString().slice(0, 8)
+}
 
 // --- Methods ---
 const handleSelect = (index) => {
   activeTab.value = index
+}
+const goTab = (tab) => {
+  activeTab.value = tab
 }
 
 const handleFileChange = (file) => {
@@ -412,7 +546,7 @@ const initWaveSurfer = (file) => {
 }
 
 const startTranscription = async () => {
-  if (!audioFile.value) return ElMessage.warning('请先上传音频文件')
+  if (!audioFile.value) return notify('warning', '请先上传音频文件')
   
   processing.value = true
   asrProgress.value = 0
@@ -431,21 +565,21 @@ const startTranscription = async () => {
           const rr = await axios.get(`http://127.0.0.1:${settings.port}/asr/result/${asrJobId.value}`)
           transcription.value = rr.data.text
           processing.value = false
-          ElMessage.success('转写完成')
+          notify('success', '转写完成')
         } else if (st.data.status === 'error' || st.data.status === 'canceled') {
           clearInterval(asrTimer)
           processing.value = false
-          ElMessage.error('任务中断: ' + (st.data.error || st.data.status))
+          notify('error', '任务中断: ' + (st.data.error || st.data.status))
         }
       } catch (e) {
         clearInterval(asrTimer)
         processing.value = false
-        ElMessage.error('查询状态失败')
+        notify('error', '查询状态失败')
       }
     }, 1000)
   } catch (err) {
     processing.value = false
-    ElMessage.error('任务提交失败: ' + (err.response?.data?.detail || err.message))
+    notify('error', '任务提交失败: ' + (err.response?.data?.detail || err.message))
   }
 }
 
@@ -455,18 +589,20 @@ const cancelTranscription = async () => {
     await axios.post(`http://127.0.0.1:${settings.port}/asr/cancel/${asrJobId.value}`)
     if (asrTimer) clearInterval(asrTimer)
     processing.value = false
-    ElMessage.success('已请求取消')
+    notify('success', '已请求取消')
   } catch {
-    ElMessage.error('取消失败')
+    notify('error', '取消失败')
   }
 }
 
 const copyTranscription = () => {
+  if (!hasTranscription.value) return
   navigator.clipboard.writeText(transcription.value)
-  ElMessage.success('已复制到剪贴板')
+  notify('success', '已复制到剪贴板')
 }
 
 const downloadTranscription = () => {
+  if (!hasTranscription.value) return
   const blob = new Blob([transcription.value], { type: 'text/plain' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -476,8 +612,8 @@ const downloadTranscription = () => {
 }
 
 const generateTTS = async () => {
-  if (!ttsText.value) return ElMessage.warning('请输入需要合成的文本')
-  if (!selectedVoice.value) return ElMessage.warning('请选择角色音色')
+  if (!ttsText.value) return notify('warning', '请输入需要合成的文本')
+  if (!selectedVoice.value) return notify('warning', '请选择角色音色')
   
   ttsLoading.value = true
   try {
@@ -486,12 +622,12 @@ const generateTTS = async () => {
       voice: selectedVoice.value,
       inference_steps: ttsInferenceSteps.value
     })
-    ElMessage.success('语音合成成功')
+    notify('success', '语音合成成功')
     if (res.data?.url) {
       ttsAudioUrl.value = `http://127.0.0.1:${settings.port}${res.data.url}`
     }
   } catch (err) {
-    ElMessage.error('合成失败: ' + (err.response?.data?.detail || err.message))
+    notify('error', '合成失败: ' + (err.response?.data?.detail || err.message))
   } finally {
     ttsLoading.value = false
   }
@@ -503,8 +639,14 @@ const fetchStatus = async () => {
     status.asr_loaded = res.data.asr_loaded
     status.tts_loaded = res.data.tts_loaded
     status.device = res.data.device
+    status.cuda_available = !!res.data.cuda_available
+    status.cuda_device_name = res.data.cuda_device_name || ''
+    status.cuda_total_mem_bytes = Number(res.data.cuda_total_mem_bytes || 0)
+    backendOnline.value = true
+    lastStatusAt.value = nowTimeText()
   } catch (e) {
     // Backend might be offline
+    backendOnline.value = false
   }
 }
 
@@ -550,44 +692,45 @@ const downloadTts = (row) => {
 }
 
 const deleteAsr = async (row) => {
-  ElMessageBox.confirm('确认删除该 ASR 记录及其文本文件吗？', '确认操作', {
-    confirmButtonText: '确定',
+  ElMessageBox.confirm('确认删除该 ASR 记录及对应文本文件？此操作不可撤销。', '删除确认', {
+    confirmButtonText: '确认删除',
     cancelButtonText: '取消',
     type: 'warning'
   }).then(async () => {
     try {
       await axios.delete(`http://127.0.0.1:${settings.port}/history/asr/${row.id}`)
-      ElMessage.success('已删除')
+      notify('success', 'ASR 记录已删除')
       fetchHistory()
     } catch {
-      ElMessage.error('删除失败')
+      notify('error', '删除 ASR 记录失败')
     }
   })
 }
 
 const deleteTts = async (row) => {
-  ElMessageBox.confirm('确认删除该 TTS 音频文件吗？', '确认操作', {
-    confirmButtonText: '确定',
+  ElMessageBox.confirm('确认删除该 TTS 音频文件？此操作不可撤销。', '删除确认', {
+    confirmButtonText: '确认删除',
     cancelButtonText: '取消',
     type: 'warning'
   }).then(async () => {
     try {
       await axios.delete(`http://127.0.0.1:${settings.port}/history/tts/${row.id}`)
-      ElMessage.success('已删除')
+      notify('success', 'TTS 记录已删除')
       fetchHistory()
     } catch {
-      ElMessage.error('删除失败')
+      notify('error', '删除 TTS 记录失败')
     }
   })
 }
 
 const saveSettings = () => {
-  ElMessageBox.confirm('修改设置需要重启后端服务，确定吗？', '确认操作', {
-    confirmButtonText: '确定',
+  ElMessageBox.confirm('应用新设置需要重启后端服务，是否继续？', '应用设置', {
+    confirmButtonText: '保存并重启',
     cancelButtonText: '取消',
     type: 'warning'
   }).then(() => {
-    ElMessage.success('设置已保存，正在重启服务...')
+    restartingBackend.value = true
+    notify('success', '设置已保存，正在重启服务...')
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
     } catch {}
@@ -597,12 +740,18 @@ const saveSettings = () => {
           fetchStatus()
           fetchVoices()
           fetchHistory()
+          restartingBackend.value = false
         }, 1200)
+      })
+      .catch(() => {
+        restartingBackend.value = false
+        notify('error', '重启服务失败')
       })
   })
 }
 
 const resetSettings = () => {
+  settings.theme = 'system'
   settings.device = 'cuda'
   settings.port = 8000
   settings.exportDir = ''
@@ -616,6 +765,7 @@ const loadSettings = () => {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (raw) {
       const data = JSON.parse(raw)
+      if (typeof data.theme === 'string') settings.theme = data.theme
       if (typeof data.port === 'number') settings.port = data.port
       if (typeof data.device === 'string') settings.device = data.device
       if (typeof data.exportDir === 'string') settings.exportDir = data.exportDir
@@ -637,17 +787,22 @@ const selectExportDir = async () => {
   if (p) {
     settings.exportDir = p
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)) } catch {}
-    ElMessage.success('已选择导出目录')
+    notify('success', '已选择导出目录')
   }
 }
 
 const exportHistory = async () => {
-  if (!settings.exportDir) return ElMessage.warning('请先选择导出目录')
-  const res = await ipcRenderer.invoke('vv:export-history', { dir: settings.exportDir })
-  if (res?.ok) {
-    ElMessage.success(`导出完成：ASR ${res.asr} 条，TTS ${res.tts} 条`)
-  } else {
-    ElMessage.error('导出失败')
+  if (!settings.exportDir) return notify('warning', '请先选择导出目录')
+  exportingHistory.value = true
+  try {
+    const res = await ipcRenderer.invoke('vv:export-history', { dir: settings.exportDir })
+    if (res?.ok) {
+      notify('success', `导出完成：ASR ${res.asr} 条，TTS ${res.tts} 条`)
+    } else {
+      notify('error', '导出失败')
+    }
+  } finally {
+    exportingHistory.value = false
   }
 }
 const openExportDir = async () => {
@@ -663,8 +818,16 @@ watch(activeTab, (newTab) => {
   }
 })
 
+watch(() => settings.theme, (theme) => {
+  applyTheme(theme)
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+  } catch {}
+})
+
 onMounted(() => {
   loadSettings()
+  applyTheme(settings.theme)
   fetchStatus()
   fetchVoices()
   fetchHistory()
@@ -682,21 +845,63 @@ onMounted(() => {
 </script>
 
 <style>
+:root {
+  --vv-bg: #f8fafc;
+  --vv-bg-soft: #f1f5f9;
+  --vv-surface: #ffffff;
+  --vv-surface-elevated: #ffffffcc;
+  --vv-border: #e2e8f0;
+  --vv-text-main: #0f172a;
+  --vv-text-secondary: #64748b;
+  --vv-text-muted: #94a3b8;
+  --vv-brand: #409eff;
+  --vv-radius: 12px;
+  --vv-shadow-soft: 0 4px 16px rgba(15, 23, 42, 0.04);
+  --vv-space-1: 8px;
+  --vv-space-2: 12px;
+  --vv-space-3: 16px;
+  --vv-space-4: 24px;
+  --vv-space-5: 32px;
+
+  /* Element Plus theme tokens */
+  --el-color-primary: var(--vv-brand);
+  --el-color-success: #16a34a;
+  --el-color-warning: #d97706;
+  --el-color-danger: #dc2626;
+  --el-text-color-primary: var(--vv-text-main);
+  --el-text-color-regular: var(--vv-text-secondary);
+  --el-border-color: var(--vv-border);
+  --el-bg-color: var(--vv-surface);
+  --el-fill-color-light: var(--vv-bg-soft);
+  --el-fill-color-blank: var(--vv-surface);
+}
+
 /* Global Resets */
-body { margin: 0; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--vv-text-main);
+}
 
 /* Transitions */
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 
-.app-container { height: 100vh; background-color: #f8fafc; }
+.app-container {
+  height: 100vh;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 42%),
+    var(--vv-bg);
+}
 
 .aside {
-  background-color: #ffffff;
-  border-right: 1px solid #e2e8f0;
+  background-color: var(--vv-surface-elevated);
+  border-right: 1px solid var(--vv-border);
   display: flex;
   flex-direction: column;
   padding: 0;
+  backdrop-filter: blur(8px);
 }
 
 .logo {
@@ -706,56 +911,422 @@ body { margin: 0; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-
   padding: 0 24px;
   font-size: 18px;
   font-weight: 700;
-  color: #1e293b;
-  border-bottom: 1px solid #f1f5f9;
+  color: #0b1220;
+  border-bottom: 1px solid var(--vv-bg-soft);
 }
-.logo small { font-weight: 400; color: #64748b; margin-left: 5px; font-size: 12px; }
+.logo small { font-weight: 500; color: var(--vv-text-secondary); margin-left: 6px; font-size: 12px; }
 
 .el-menu-vertical { border-right: none !important; flex: 1; padding: 12px 0; }
-.el-menu-item { height: 50px; line-height: 50px; margin: 4px 12px; border-radius: 8px; }
+.el-menu-item {
+  height: 50px;
+  line-height: 50px;
+  margin: 4px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+.el-menu-item:hover { background-color: #f8fafc; }
 .el-menu-item.is-active { background-color: #f0f7ff !important; color: #409eff !important; font-weight: 600; }
 
 .status-panel {
   padding: 24px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--vv-bg-soft);
   font-size: 13px;
-  color: #64748b;
+  color: var(--vv-text-secondary);
 }
 .status-item { display: flex; align-items: center; margin-bottom: 10px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background-color: #cbd5e1; margin-right: 10px; }
 .dot.active { background-color: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
 .device-info { margin-top: 12px; }
 
-.main-content { padding: 40px; max-width: 1000px; margin: 0 auto; }
-
-.page-header { margin-bottom: 32px; }
-.page-header h2 { margin: 0 0 8px 0; color: #1e293b; font-size: 24px; }
-.page-header p { margin: 0; color: #64748b; font-size: 14px; }
-
-.upload-card, .editor-card, .config-card, .settings-card {
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
+.main-content {
+  padding: var(--vv-space-5) 36px;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+.workspace-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--vv-space-2);
+  border: 1px solid var(--vv-border);
+  border-radius: var(--vv-radius);
+  background: var(--vv-surface-elevated);
+  padding: 10px 14px;
+  margin-bottom: var(--vv-space-4);
+}
+.workspace-left, .workspace-right {
+  display: flex;
+  align-items: center;
+  gap: var(--vv-space-1);
+  flex-wrap: wrap;
+}
+.workspace-meta {
+  color: var(--vv-text-secondary);
+  font-size: 12px;
+}
+.workspace-divider {
+  color: #cbd5e1;
 }
 
-.asr-uploader .el-upload-dragger { border-radius: 12px; padding: 40px; }
+.page-header { margin-bottom: var(--vv-space-5); }
+.page-header h2 { margin: 0 0 8px 0; color: var(--vv-text-main); font-size: 26px; letter-spacing: 0.2px; font-weight: 700; }
+.page-header p { margin: 0; color: var(--vv-text-secondary); font-size: 14px; }
+.header-meta {
+  margin-top: var(--vv-space-2);
+  display: flex;
+  gap: var(--vv-space-1);
+  flex-wrap: wrap;
+}
 
-.audio-info { margin-top: 24px; }
-.file-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; color: #475569; font-size: 14px; }
-.waveform-container { background: #f1f5f9; border-radius: 8px; padding: 12px; margin-bottom: 20px; }
-.actions { text-align: center; }
+.upload-card, .editor-card, .config-card, .settings-card {
+  border-radius: var(--vv-radius);
+  border: 1px solid var(--vv-border);
+}
+.polished-card {
+  box-shadow: var(--vv-shadow-soft);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.polished-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
 
-.result-card { margin-top: 32px; border-radius: 12px; }
+.asr-uploader .el-upload-dragger {
+  border-radius: 12px;
+  padding: 40px;
+  border: 1px dashed #cbd5e1;
+  background: linear-gradient(180deg, var(--vv-surface), #f8fbff);
+  transition: all 0.2s ease;
+}
+.asr-uploader .el-upload-dragger:hover {
+  border-color: #60a5fa;
+  transform: translateY(-1px);
+}
+
+.audio-info { margin-top: var(--vv-space-4); }
+.file-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; color: var(--vv-text-secondary); font-size: 14px; }
+.waveform-container { background: var(--vv-bg-soft); border-radius: 8px; padding: 12px; margin-bottom: 20px; }
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.primary-action { min-width: 200px; }
+
+.result-card { margin-top: var(--vv-space-5); border-radius: 12px; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
-.card-header .title { font-weight: 600; color: #1e293b; }
-.transcription-content { white-space: pre-wrap; line-height: 1.8; color: #334155; font-size: 15px; min-height: 100px; }
+.card-header .title { font-weight: 600; color: var(--vv-text-main); }
+.card-header .tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.transcription-content {
+  white-space: pre-wrap;
+  line-height: 1.85;
+  color: var(--vv-text-main);
+  font-size: 15px;
+  min-height: 100px;
+  background: var(--vv-surface);
+  border: 1px solid var(--vv-border);
+  border-radius: 10px;
+  padding: 14px;
+}
+.loading-state {
+  border-radius: 10px;
+  border: 1px dashed var(--vv-border);
+  background: var(--vv-surface);
+  padding: 14px;
+}
 
-.text-stats { margin-top: 12px; font-size: 12px; color: #94a3b8; text-align: right; }
-.tts-actions { margin-top: 24px; }
+.text-stats { margin-top: var(--vv-space-2); font-size: 12px; color: var(--vv-text-muted); text-align: right; }
+.text-hint { margin-top: 6px; font-size: 12px; color: #64748b; text-align: right; }
+.tts-actions { margin-top: var(--vv-space-4); }
+.audio-preview { margin-top: 12px; }
+.export-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+.settings-actions .el-form-item__content { gap: 10px; }
 
-.form-tip { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+.form-tip {
+  font-size: 12px;
+  color: var(--vv-text-muted);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.theme-actions {
+  margin-top: 6px;
+}
 .history-card, .about-card { border-radius: 12px; }
-.about-content h3 { color: #1e293b; margin-top: 0; }
-.about-content h4 { color: #334155; margin-bottom: 12px; }
-.about-content ul { padding-left: 20px; line-height: 2; color: #475569; }
+.history-card .el-table th.el-table__cell {
+  background: var(--vv-bg);
+  color: var(--vv-text-main);
+}
+.history-card .el-table tr:hover > td.el-table__cell {
+  background: #f8fbff;
+}
+.history-card .el-empty {
+  padding: 24px 0;
+}
+.about-hero {
+  background: linear-gradient(180deg, #fbfdff, #f8fbff);
+  border: 1px solid var(--vv-border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.about-tags {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.about-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.about-block {
+  border: 1px solid var(--vv-border);
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--vv-surface);
+}
+.about-content h3 { color: var(--vv-text-main); margin-top: 0; }
+.about-content h4 { color: var(--vv-text-main); margin-bottom: 12px; }
+.about-content ul { padding-left: 20px; line-height: 2; color: var(--vv-text-secondary); }
 .about-content li { margin-bottom: 8px; }
+
+.el-button {
+  transition: all 0.18s ease;
+}
+.el-tag {
+  border-radius: 999px;
+  font-weight: 600;
+}
+.el-button:focus-visible,
+.el-input__inner:focus-visible,
+.el-textarea__inner:focus-visible,
+.el-upload-dragger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--vv-brand) 45%, white);
+  outline-offset: 2px;
+}
+.el-button:not(.is-disabled):hover {
+  transform: translateY(-1px);
+}
+.el-button:not(.is-disabled):active {
+  transform: translateY(0);
+}
+.el-button--primary:not(.is-disabled):hover {
+  filter: saturate(1.05) brightness(1.02);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --vv-bg: #0b1220;
+    --vv-bg-soft: #111a2e;
+    --vv-surface: #111a2b;
+    --vv-surface-elevated: #111a2bd9;
+    --vv-border: #22314a;
+    --vv-text-main: #e6edf8;
+    --vv-text-secondary: #9db0ce;
+    --vv-text-muted: #7f93b2;
+    --vv-shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.35);
+
+    --el-color-primary: #5ea8ff;
+    --el-color-success: #34d399;
+    --el-color-warning: #fbbf24;
+    --el-color-danger: #f87171;
+    --el-text-color-primary: var(--vv-text-main);
+    --el-text-color-regular: var(--vv-text-secondary);
+    --el-border-color: var(--vv-border);
+    --el-bg-color: var(--vv-surface);
+    --el-fill-color-light: #16233a;
+    --el-fill-color-blank: var(--vv-surface);
+  }
+
+  :root:not([data-theme='light']) .app-container {
+    background:
+      radial-gradient(circle at top right, rgba(64, 158, 255, 0.18), transparent 42%),
+      var(--vv-bg);
+  }
+
+  :root:not([data-theme='light']) .el-menu-item:hover {
+    background-color: #17243a;
+  }
+
+  :root:not([data-theme='light']) .el-menu-item.is-active {
+    background-color: #173050 !important;
+  }
+
+  :root:not([data-theme='light']) .asr-uploader .el-upload-dragger,
+  :root:not([data-theme='light']) .about-hero {
+    background: #121f36;
+  }
+
+  :root:not([data-theme='light']) .history-card .el-table tr:hover > td.el-table__cell {
+    background: #162742;
+  }
+
+  :root:not([data-theme='light']) .transcription-content,
+  :root:not([data-theme='light']) .loading-state,
+  :root:not([data-theme='light']) .about-block {
+    background: #111a2b;
+  }
+
+  :root:not([data-theme='light']) .workspace-divider {
+    color: #3a4f72;
+  }
+}
+
+:root[data-theme='dark'] {
+  --vv-bg: #0b1220;
+  --vv-bg-soft: #111a2e;
+  --vv-surface: #111a2b;
+  --vv-surface-elevated: #111a2bd9;
+  --vv-border: #22314a;
+  --vv-text-main: #e6edf8;
+  --vv-text-secondary: #9db0ce;
+  --vv-text-muted: #7f93b2;
+  --vv-shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.35);
+
+  --el-color-primary: #5ea8ff;
+  --el-color-success: #34d399;
+  --el-color-warning: #fbbf24;
+  --el-color-danger: #f87171;
+  --el-text-color-primary: var(--vv-text-main);
+  --el-text-color-regular: var(--vv-text-secondary);
+  --el-border-color: var(--vv-border);
+  --el-bg-color: var(--vv-surface);
+  --el-fill-color-light: #16233a;
+  --el-fill-color-blank: var(--vv-surface);
+}
+
+:root[data-theme='dark'] .app-container {
+  background:
+    radial-gradient(circle at top right, rgba(64, 158, 255, 0.18), transparent 42%),
+    var(--vv-bg);
+}
+
+:root[data-theme='dark'] .el-menu-item:hover {
+  background-color: #17243a;
+}
+
+:root[data-theme='dark'] .el-menu-item.is-active {
+  background-color: #173050 !important;
+}
+
+:root[data-theme='dark'] .asr-uploader .el-upload-dragger,
+:root[data-theme='dark'] .about-hero {
+  background: #121f36;
+}
+
+:root[data-theme='dark'] .history-card .el-table tr:hover > td.el-table__cell {
+  background: #162742;
+}
+
+:root[data-theme='dark'] .transcription-content,
+:root[data-theme='dark'] .loading-state,
+:root[data-theme='dark'] .about-block {
+  background: #111a2b;
+}
+
+:root[data-theme='dark'] .workspace-divider {
+  color: #3a4f72;
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --vv-border: #7f8ea8;
+    --vv-text-secondary: #344256;
+    --vv-text-muted: #4b5d78;
+    --vv-shadow-soft: 0 0 0 2px rgba(15, 23, 42, 0.22);
+  }
+
+  .polished-card,
+  .workspace-status,
+  .transcription-content,
+  .loading-state,
+  .about-block {
+    box-shadow: none;
+    border-width: 2px;
+  }
+
+  .el-button--primary {
+    border: 2px solid color-mix(in srgb, var(--el-color-primary) 70%, black);
+  }
+}
+
+@media (forced-colors: active) {
+  .polished-card,
+  .workspace-status,
+  .transcription-content,
+  .loading-state,
+  .about-block {
+    forced-color-adjust: auto;
+    border: 1px solid CanvasText;
+    box-shadow: none;
+  }
+
+  .workspace-divider {
+    color: CanvasText;
+  }
+}
+
+@media (max-width: 1024px) {
+  .main-content {
+    padding: 20px;
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    display: block;
+    height: auto;
+    min-height: 100vh;
+  }
+  .aside {
+    width: 100% !important;
+    border-right: none;
+    border-bottom: 1px solid var(--vv-border);
+  }
+  .status-panel {
+    display: none;
+  }
+  .page-header h2 {
+    font-size: 22px;
+  }
+  .workspace-status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .header-meta {
+    margin-top: 10px;
+  }
+  .card-header {
+    align-items: flex-start;
+    gap: 8px;
+    flex-direction: column;
+  }
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+  .history-card .el-table .cell {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .export-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .primary-action {
+    width: 100%;
+  }
+}
 </style>
